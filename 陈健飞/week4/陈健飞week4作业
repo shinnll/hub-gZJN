@@ -1,0 +1,65 @@
+import torch
+import torch.nn as nn
+
+# 定义：一层 Transformer Encoder 层
+class SimpleTransformerLayer(nn.Module):
+    def __init__(
+        self,
+        embed_dim: int = 128,   # 每个词向量的维度
+        num_heads: int = 2,     # 注意力头数
+        hidden_dim: int = 256   # 前馈网络中间维度
+    ):
+        super().__init__()
+        # 1. 多头自注意力
+        self.attn = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            batch_first=True  # 让输入格式更简单：(batch, 序列长度, 维度)
+        )
+
+        # 2. 两层归一化（防止训练不稳定）
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)
+
+        # 3. 前馈网络（简单两层全连接）
+        self.ffn = nn.Sequential(
+            nn.Linear(embed_dim, hidden_dim),  # 升维
+            nn.ReLU(),                           # 激活函数
+            nn.Linear(hidden_dim, embed_dim)    # 降维回原维度
+        )
+
+    def forward(self, x):
+        """
+        前向传播：输入 → 注意力 → 残差+归一化 → 前馈 → 残差+归一化
+        x: 输入，形状 (batch_size, seq_len, embed_dim)
+        """
+        # 第一步：自注意力 + 残差连接
+        attn_out, _ = self.attn(x, x, x)  # Q=K=V=x（自注意力）
+        x = self.norm1(x + attn_out)      # 残差：原输入 + 注意力输出，再归一化
+
+        # 第二步：前馈网络 + 残差连接
+        ffn_out = self.ffn(x)
+        x = self.norm2(x + ffn_out)       # 残差：输入 + 前馈输出，再归一化
+
+        return x
+
+
+# --------------------------------------------------------------------------
+if __name__ == "__main__":
+    # 超参数
+    batch_size = 2    # 一次处理2个句子
+    seq_len = 10      # 每个句子10个词
+    embed_dim = 128   # 每个词向量128维
+
+    # 1. 造一个假输入（模拟句子的向量）
+    input_x = torch.randn(batch_size, seq_len, embed_dim)
+    print("输入形状：", input_x.shape)  # 输出：torch.Size([2, 10, 128])
+
+    # 2. 初始化一层 Transformer
+    transformer_layer = SimpleTransformerLayer(embed_dim=128, num_heads=2)
+
+    # 3. 前向传播（跑一遍）
+    output_x = transformer_layer(input_x)
+    print("输出形状：", output_x.shape)  # 输出：torch.Size([2, 10, 128])
+
+    print("运行成功，无报错！")
